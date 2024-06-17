@@ -106,6 +106,48 @@ def print_results(letter_count, alphabet_array, total_letters, top_5_bigrams, bi
         print(f"{alphabet_list[i]} " + " ".join(f"{count:2}" for count in row))
 
 
+def extended_gcd(a, b):
+    """Розширений алгоритм Евкліда. Повертає (gcd, x, y), де gcd - найбільший спільний дільник a та b, і x, y такі, що ax + by = gcd"""
+    old_r, r = a, b
+    old_s, s = 1, 0
+    old_t, t = 0, 1
+
+    while r != 0:
+        quotient = old_r // r
+        old_r, r = r, old_r - quotient * r
+        old_s, s = s, old_s - quotient * s
+        old_t, t = t, old_t - quotient * t
+
+    return old_r, old_s, old_t
+
+
+def mod_inverse(a, n):
+    """Обчислює обернений елемент для a за модулем n, якщо він існує."""
+    gcd, x, y = extended_gcd(a, n)
+    if gcd != 1:
+        raise ValueError(f"Обернений елемент не існує для {a} за модулем {n}")
+    return x % n
+
+
+def solve_linear_congruence(a, b, n):
+    """
+    Розв'язує лінійне порівняння ax ≡ b (mod n).
+    Повертає список усіх розв'язків, якщо вони існують, або порожній список, якщо розв'язків немає.
+    """
+    gcd, x, _ = extended_gcd(a, n)
+    if b % gcd != 0:
+        return []  # Немає розв'язків
+
+    a1 = a // gcd
+    b1 = b // gcd
+    n1 = n // gcd
+    x0 = (x * b1) % n1  # Один розв'язок
+
+    # Генеруємо всі розв'язки
+    solutions = [(x0 + i * n1) % n for i in range(gcd)]
+    return solutions
+
+
 def main():
     filename = input("Введіть шлях до текстового файлу: ")
     text = read_file(filename)
@@ -116,6 +158,10 @@ def main():
     top_5_bigrams = get_top_5_bigrams(bigram_matrix, alphabet_array)
     total_letters = sum(letter_count.values())
     print_results(letter_count, alphabet_array, total_letters, top_5_bigrams, bigram_matrix)
+
+    russian_bigrams = [('с', 'т'), ('н', 'о'), ('т', 'о'), ('н', 'а'), ('е', 'н')]
+    for bigram in russian_bigrams:
+        print(f"Російська біграма: {bigram}")
 
 
 if __name__ == "__main__":
