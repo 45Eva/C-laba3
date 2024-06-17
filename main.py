@@ -1,3 +1,7 @@
+from itertools import permutations
+import zlib
+
+
 def read_file(filename):
     """Зчитує файл і повертає його вміст як рядок."""
     with open(filename, 'r', encoding='utf-8') as file:
@@ -148,8 +152,73 @@ def solve_linear_congruence(a, b, n):
     return solutions
 
 
+def find_possible_keys(top_bigrams_shifr, top_bigrams_russian, alphabet_array):
+    m = len(alphabet_array)
+    m_squared = m ** 2
+    possible_keys = []
+
+    # Перетворення біграм в індекси
+    def bigram_to_index(bigram):
+        return alphabet_array[bigram[0]] * m + alphabet_array[bigram[1]]
+
+    shifr_indices = [bigram_to_index(bigram) for bigram in top_bigrams_shifr]
+    russian_indices = [bigram_to_index(bigram) for bigram in top_bigrams_russian]
+
+    for (X1, X2), (Y1, Y2) in permutations(zip(shifr_indices, russian_indices), 2):
+        delta_X = (X1 - X2) % m_squared
+        delta_Y = (Y1 - Y2) % m_squared
+
+        possible_a_values = solve_linear_congruence(delta_X, delta_Y, m_squared)
+        for a in possible_a_values:
+            b = (Y1 - a * X1) % m_squared
+            possible_keys.append((a, b))
+
+    return possible_keys
+
+
+def affine_decrypt(text, a, b, alphabet_array):
+    m = len(alphabet_array)
+    m_squared = m ** 2
+    inverse_a = mod_inverse(a, m_squared)
+    decrypted_text = []
+
+    for i in range(0, len(text), 2):
+        first_letter = text[i]
+        second_letter = text[i + 1]
+
+        if first_letter == 'ё':
+            first_letter = 'е'
+        if second_letter == 'ё':
+            second_letter = 'е'
+
+        if first_letter in alphabet_array and second_letter in alphabet_array:
+            y = alphabet_array[first_letter] * m + alphabet_array[second_letter]
+            x = (inverse_a * (y - b)) % m_squared
+            decrypted_text.append((x // m, x % m))
+
+    alphabet_list = list(alphabet_array.keys())
+    decrypted_text_str = ''.join(alphabet_list[x] + alphabet_list[y] for x, y in decrypted_text)
+
+    return decrypted_text_str
+
+
+def is_meaningful_text(text):
+    """Перевіряє, чи є текст змістовним російською мовою."""
+    compressed_text = zlib.compress(text.encode('utf-8'))
+    compression_ratio = len(compressed_text) / len(text)
+    return compression_ratio < 0.9
+
+
+def write_decrypted_text(filename, decrypted_text):
+    """Записує розшифрований текст у файл."""
+    with open(filename, 'w', encoding='utf-8') as file:
+        file.write(decrypted_text)
+
+
 def main():
     filename = input("Введіть шлях до текстового файлу: ")
+    output_filename = input("Введіть шлях до вихідного файлу для розшифрованого тексту (txt): ")
+
     text = read_file(filename)
     letter_count = count_letters(text)
     alphabet_type = determine_alphabet_type(letter_count)
@@ -160,8 +229,23 @@ def main():
     print_results(letter_count, alphabet_array, total_letters, top_5_bigrams, bigram_matrix)
 
     russian_bigrams = [('с', 'т'), ('н', 'о'), ('т', 'о'), ('н', 'а'), ('е', 'н')]
-    for bigram in russian_bigrams:
-        print(f"Російська біграма: {bigram}")
+    possible_keys = find_possible_keys([bigram for bigram, _ in top_5_bigrams], russian_bigrams, alphabet_array)
+
+    found_meaningful_text = False
+    for a, b in possible_keys:
+        decrypted_text = affine_decrypt(text, a, b, alphabet_array)
+        if is_meaningful_text(decrypted_text):
+            print(f"Знайдено можливий ключ (a={a}, b={b})")
+            print("Дешифрований текст:")
+            print(decrypted_text)
+            write_decrypted_text(output_filename, decrypted_text)
+            found_meaningful_text = True
+            break
+        else:
+            print(f"Ключ (a={a}, b={b}) не дав змістовного тексту. Продовжую пошук...")
+
+    if not found_meaningful_text:
+        print("Не вдалося знайти змістовний текст для жодного з можливих ключів.")
 
 
 if __name__ == "__main__":
