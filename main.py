@@ -1,5 +1,6 @@
 from itertools import permutations
 import zlib
+import math
 
 
 def read_file(filename):
@@ -139,41 +140,57 @@ def solve_linear_congruence(a, b, n):
     Повертає список усіх розв'язків, якщо вони існують, або порожній список, якщо розв'язків немає.
     """
     gcd, x, _ = extended_gcd(a, n)
+
     if b % gcd != 0:
         return []  # Немає розв'язків
 
     a1 = a // gcd
     b1 = b // gcd
     n1 = n // gcd
-    x0 = (x * b1) % n1  # Один розв'язок
 
-    # Генеруємо всі розв'язки
-    solutions = [(x0 + i * n1) % n for i in range(gcd)]
-    return solutions
+    if gcd == 1:
+        # Один розв'язок
+        x0 = (x * b1) % n1
+        return [x0]
+    else:
+        # Декілька розв'язків
+        solutions = []
+        x0 = (x * b1) % n1  # Перший розв'язок
+
+        for i in range(gcd):
+            solution = (x0 + i * n1) % n
+            solutions.append(solution)
+
+        return solutions
 
 
 def find_possible_keys(top_bigrams_shifr, top_bigrams_russian, alphabet_array):
     m = len(alphabet_array)
     m_squared = m ** 2
-    possible_keys = []
+    possible_keys_list = []
 
-    # Перетворення біграм в індекси
-    def bigram_to_index(bigram):
-        return alphabet_array[bigram[0]] * m + alphabet_array[bigram[1]]
+    for (shifr_bigram, russian_bigram) in zip(top_bigrams_shifr, top_bigrams_russian):
+        # Отримуємо індекси символів у відповідному алфавіті для біграм з вхідного тексту
+        X1 = alphabet_array[shifr_bigram[0]]
+        X2 = alphabet_array[shifr_bigram[1]]
 
-    shifr_indices = [bigram_to_index(bigram) for bigram in top_bigrams_shifr]
-    russian_indices = [bigram_to_index(bigram) for bigram in top_bigrams_russian]
+        # Отримуємо індекси символів у відповідному алфавіті для біграм з російської мови
+        Y1 = alphabet_array[russian_bigram[0]]
+        Y2 = alphabet_array[russian_bigram[1]]
 
-    for (X1, X2), (Y1, Y2) in permutations(zip(shifr_indices, russian_indices), 2):
         delta_X = (X1 - X2) % m_squared
         delta_Y = (Y1 - Y2) % m_squared
 
         possible_a_values = solve_linear_congruence(delta_X, delta_Y, m_squared)
+        possible_keys = []
+
         for a in possible_a_values:
             b = (Y1 - a * X1) % m_squared
             possible_keys.append((a, b))
 
-    return possible_keys
+        possible_keys_list.append(possible_keys)
+
+    return possible_keys_list
 
 
 def affine_decrypt(text, a, b, alphabet_array):
@@ -202,13 +219,6 @@ def affine_decrypt(text, a, b, alphabet_array):
     return decrypted_text_str
 
 
-def is_meaningful_text(text):
-    """Перевіряє, чи є текст змістовним російською мовою."""
-    compressed_text = zlib.compress(text.encode('utf-8'))
-    compression_ratio = len(compressed_text) / len(text)
-    return compression_ratio < 0.9
-
-
 def write_decrypted_text(filename, decrypted_text):
     """Записує розшифрований текст у файл."""
     with open(filename, 'w', encoding='utf-8') as file:
@@ -229,23 +239,25 @@ def main():
     print_results(letter_count, alphabet_array, total_letters, top_5_bigrams, bigram_matrix)
 
     russian_bigrams = [('с', 'т'), ('н', 'о'), ('т', 'о'), ('н', 'а'), ('е', 'н')]
-    possible_keys = find_possible_keys([bigram for bigram, _ in top_5_bigrams], russian_bigrams, alphabet_array)
 
-    found_meaningful_text = False
-    for a, b in possible_keys:
-        decrypted_text = affine_decrypt(text, a, b, alphabet_array)
-        if is_meaningful_text(decrypted_text):
-            print(f"Знайдено можливий ключ (a={a}, b={b})")
-            print("Дешифрований текст:")
-            print(decrypted_text)
-            write_decrypted_text(output_filename, decrypted_text)
-            found_meaningful_text = True
-            break
-        else:
-            print(f"Ключ (a={a}, b={b}) не дав змістовного тексту. Продовжую пошук...")
+    print("\nЗнаходження ключів для кожної біграми з вхідного тексту:")
+    all_possible_keys = []
 
-    if not found_meaningful_text:
-        print("Не вдалося знайти змістовний текст для жодного з можливих ключів.")
+    for i, (shifr_bigram, russian_bigram) in enumerate(zip([bigram for bigram, _ in top_5_bigrams], russian_bigrams), 1):
+        print(f"\nБіграма {i}: {shifr_bigram} → {russian_bigram}")
+
+        possible_keys_list = find_possible_keys([shifr_bigram], [russian_bigram], alphabet_array)
+
+        print("\nЗнайдені можливі ключі (a, b):")
+        for j, possible_keys in enumerate(possible_keys_list, 1):
+            print(f"Для біграми {shifr_bigram} та {russian_bigram}:")
+            for k, (a, b) in enumerate(possible_keys, 1):
+                print(f"Ключ {j}.{k}: (a={a}, b={b})")
+                all_possible_keys.append((shifr_bigram, russian_bigram, a, b))
+
+    # Тепер all_possible_keys містить усі можливі комбінації ключів для усіх пар біграм
+
+    # Далі ви можете обрати найкращі ключі для розшифрування тексту і використовувати їх
 
 
 if __name__ == "__main__":
