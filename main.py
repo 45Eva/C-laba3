@@ -40,9 +40,9 @@ def determine_alphabet_type(letter_count):
 def form_alphabet_array(alphabet_type):
     """Формує масив алфавіту відповідно до типу алфавіту."""
     if alphabet_type == 'alphabet_without_hard_sign':
-        alphabet = 'абвгдежзийклмнопрстуфхцчшщыьэюя'
+        alphabet = 'абвгдежзийклмнопрстуфхцчшщьыэюя'
     elif alphabet_type == 'alphabet_without_soft_sign':
-        alphabet = 'абвгдежзийклмнопрстуфхцчшщъыэюя'
+        alphabet = 'абвгдежзийклмнопрстуфхцчшщьыэюя'
     else:
         raise ValueError("Неочікуваний тип алфавіту")
 
@@ -172,13 +172,10 @@ def find_possible_keys(top_bigrams_shifr, russian_bigrams, alphabet_array, text)
     m_squared = m ** 2
     possible_keys_list = []
 
-    for shifr_bigram_pair in top_bigrams_shifr:
-        possible_keys = []
-        shifr_bigram1, shifr_bigram2 = shifr_bigram_pair[0], shifr_bigram_pair[1]
-        Y1 = alphabet_array[shifr_bigram1[0]] * m + alphabet_array[shifr_bigram1[1]]
-        Y2 = alphabet_array[shifr_bigram2[0]] * m + alphabet_array[shifr_bigram2[1]]
-
-        for russian_bigram_pair in russian_bigrams:
+    for shifr_bigram_pair in permutations(top_bigrams_shifr, 2):
+        Y1 = alphabet_array[shifr_bigram_pair[0][0]] * m + alphabet_array[shifr_bigram_pair[0][1]]
+        Y2 = alphabet_array[shifr_bigram_pair[1][0]] * m + alphabet_array[shifr_bigram_pair[1][1]]
+        for russian_bigram_pair in permutations(russian_bigrams, 2):
             russian_bigram1, russian_bigram2 = russian_bigram_pair[0], russian_bigram_pair[1]
             X1 = alphabet_array[russian_bigram1[0]] * m + alphabet_array[russian_bigram1[1]]
             X2 = alphabet_array[russian_bigram2[0]] * m + alphabet_array[russian_bigram2[1]]
@@ -189,27 +186,25 @@ def find_possible_keys(top_bigrams_shifr, russian_bigrams, alphabet_array, text)
             possible_a_values = solve_linear_congruence(delta_X, delta_Y, m_squared)
 
             for a in possible_a_values:
+                try:
+                    mod_inverse(a, m_squared)
+                except ValueError:
+                    break
                 b = (Y1 - a * X1) % m_squared
-                possible_keys.append((a, b))
+                possible_keys_list.append((a, b))
 
-            possible_keys_list.append(possible_keys)
-
-            return possible_keys_list
+    return possible_keys_list
 
 def affine_decrypt(text, a, b, alphabet_array):
     m = len(alphabet_array)
     m_squared = m ** 2
     inverse_a = mod_inverse(a, m_squared)
     decrypted_text = []
+    string = ""
 
     for i in range(0, len(text) - 1, 2):
         first_letter = text[i]
         second_letter = text[i + 1]
-
-        if first_letter == 'ё':
-            first_letter = 'е'
-        if second_letter == 'ё':
-            second_letter = 'е'
 
         if first_letter in alphabet_array and second_letter in alphabet_array:
             y1 = alphabet_array[first_letter] * m + alphabet_array[second_letter]
@@ -220,6 +215,8 @@ def affine_decrypt(text, a, b, alphabet_array):
 
             decrypted_text.append((x11, x12))
 
+    if a == 27:
+        print ("!")
     alphabet_list = list(alphabet_array.keys())
     decrypted_text_str = ''.join(alphabet_list[x] + alphabet_list[y] for x, y in decrypted_text)
 
@@ -247,19 +244,16 @@ def main():
 
     russian_bigrams = [('с', 'т'), ('н', 'о'), ('т', 'о'), ('н', 'а'), ('е', 'н')]
     top_bigrams_shifr = [bigram[0] for bigram in top_5_bigrams]
-    possible_combinations = find_possible_combinations(top_bigrams_shifr, russian_bigrams)
+    possible_keys_list = find_possible_keys(top_bigrams_shifr, russian_bigrams, alphabet_array, text)
+    print (possible_keys_list)
+    for (idx, (a, b)) in enumerate(possible_keys_list):
+        # print(f"\nЗнайдені можливі ключі для біграм {shifr_bigram1}, {shifr_bigram2} та {russian_bigrams[idx]}:")
 
-    for shifr_bigram1, shifr_bigram2, russian_bigrams in possible_combinations:
-        possible_keys_list = find_possible_keys([shifr_bigram1, shifr_bigram2], russian_bigrams, alphabet_array, text)
-
-        for idx, possible_keys in enumerate(possible_keys_list):
-            print(f"\nЗнайдені можливі ключі для біграм {shifr_bigram1}, {shifr_bigram2} та {russian_bigrams[idx]}:")
-            for k, (a, b) in enumerate(possible_keys, 1):
-                decrypted_text = affine_decrypt(text, a, b, alphabet_array)
-                print(f"Ключ {k}: (a={a}, b={b})")
-                print(f"Розшифрований текст для ключа (a={a}, b={b}):")
-                print(decrypted_text[:100] + "...")
-                write_decrypted_text(f"{output_filename}_key_{a}_{b}.txt", decrypted_text)
+        print(f"Ключ {idx}: (a={a}, b={b})")
+        decrypted_text = affine_decrypt(text, a, b, alphabet_array)
+        print(f"Розшифрований текст для ключа (a={a}, b={b}):")
+        print(decrypted_text[:100] + "...")
+        write_decrypted_text(f"{output_filename}_key_{a}_{b}.txt", decrypted_text)
 
 
 if __name__ == "__main__":
